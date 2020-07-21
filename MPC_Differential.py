@@ -18,10 +18,7 @@ T = 5  # horizon length
 R = np.diag([10000, .05])  # input cost matrix
 Q = np.diag([10, 10,0.000])  # state cost matrix
 Qf = np.diag([10, 10, 0.000]) # state final matrix
-
 Rd = np.diag([10000, 0.01])
-
-#Rd = np.diag([0.01, .1])  # input difference cost matrix
 
 GOAL_DIS = 4  # goal distance
 STOP_SPEED = 0.15   # stop speed
@@ -35,23 +32,12 @@ N_IND_SEARCH = 10  # Search index number
 DT = 0.25  # [s] time tick
 
 TARGET_SPEED = 0.35   # [m/s] target speed
-MAX_D = 5
-
-
 
 class State:
     def __init__(self, x=0.0, y=0.0, yaw=0.0):
         self.x = x
         self.y = y
         self.yaw = yaw
-
-def pi_2_pi(angle):
-    while(angle > math.pi):
-        angle = angle - 2.0 * math.pi
-    while(angle < -math.pi):
-        angle = angle + 2.0 * math.pi
-    return angle
-
 
 def get_linear_model_matrix(vref,phi):
     A = np.zeros((NX, NX))
@@ -63,13 +49,12 @@ def get_linear_model_matrix(vref,phi):
 
     B = np.zeros((NX, NU))
     B[0, 0] = DT * math.cos(phi)
-    B[0, 1] = -0.5*DT*DT*math.sin(phi)*vref
+    B[0, 1] = -0.5*DT*DT*math.sin(phi)*vref #0
     B[1, 0] = DT * math.sin(phi)
-    B[1, 1] = 0.5*DT*DT*math.cos(phi)*vref
+    B[1, 1] = 0.5*DT*DT*math.cos(phi)*vref #0
     B[2, 1] = DT
 
     return A, B
-
 
 def update_state(state, v, omega):
     state.x = state.x + v * math.cos(state.yaw) * DT
@@ -81,6 +66,13 @@ def update_state(state, v, omega):
 def get_nparray_from_matrix(x):
     return np.array(x).flatten()
 
+def pi_2_pi(angle):
+    while(angle > math.pi):
+        angle = angle - 2.0 * math.pi
+    while(angle < -math.pi):
+        angle = angle + 2.0 * math.pi
+    return angle
+
 def plot_arrow(x, y, yaw, length=0.2, width=0.5, fc="r", ec="k"):
     if not isinstance(x, float):
         for (ix, iy, iyaw) in zip(x, y, yaw):
@@ -89,7 +81,6 @@ def plot_arrow(x, y, yaw, length=0.2, width=0.5, fc="r", ec="k"):
         plt.arrow(x, y, length * math.cos(yaw), length * math.sin(yaw),
             fc=fc, ec=ec, head_width=width, head_length=width)
         plt.plot(x, y)
-
 
 def calc_nearest_index(state, cx, cy, cyaw, pind):
     dx = [state.x - icx for icx in cx[pind:(pind + N_IND_SEARCH)]]
@@ -104,7 +95,6 @@ def calc_nearest_index(state, cx, cy, cyaw, pind):
     if angle < 0:
         mind *= -1
     return ind, mind
-
 
 def calc_speed_profile(cx, cy, cyaw, target_speed):
     speed_profile = [target_speed] * len(cx)
@@ -127,7 +117,6 @@ def calc_speed_profile(cx, cy, cyaw, target_speed):
     speed_profile[-1] = 0.0
     return speed_profile
 
-
 def smooth_yaw(yaw):
     for i in range(len(yaw) - 1):
         dyaw = yaw[i + 1] - yaw[i]
@@ -138,7 +127,6 @@ def smooth_yaw(yaw):
             yaw[i + 1] += math.pi * 2.0
             dyaw = yaw[i + 1] - yaw[i]
     return yaw
-
 
 def calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, pind,cur_vel):
     xref = np.zeros((NX, T + 1))
@@ -181,32 +169,20 @@ def check_goal(state, goal, tind, nind,vi):
         return True
     return False
 
-def get_forward_course(dl):
-    #ax = [0.0, 0.5, 1.0, 2.0]
-    #ay = [0.0, 0.0, 0.0, 0.0]
-    #ax = [0.0, 1.0, 1.5, 2.0, 3.0]
-    #ay = [0.0, 1.0, 2.0, 1.0, 0.0]   
-    ax = [0.0, 1.0, 1.5, 3.0, 4.0]
-    ay = [0.0, 1.0, 2.0, 1.0, 0.0] 
-    cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(ax, ay, ds=dl)
-    return cx, cy, cyaw, ck
-
-
-def iterative_linear_mpc_control(xref, x0, vref, ov, oomega, u0):
+def iterative_linear_mpc_control(xref, x0, vref, ov, oomega):
     if ov is None or oomega is None:
         ov = [0.0] * T
         oomega = [0.0] * T
     for i in range(MAX_ITER):
         xbar = predict_motion(x0, ov, oomega, xref)
         pov, poomega = ov[:], oomega[:]
-        ov, omega, ox, oy, oyaw,ovr, ovl = linear_mpc_control(xref, xbar, x0, vref, u0)
+        ov, omega, ox, oy, oyaw,ovr, ovl = linear_mpc_control(xref, xbar, x0, vref)
         du = sum(abs(np.array(ov) - np.array(pov))) + sum(abs(np.array(oomega) - np.array(poomega)))
         if (du <= DU_TH):
             break   
     else:
         print("Iterative is max iter")
     return ov, omega, ox, oy, oyaw, ovr, ovl
-
 
 def predict_motion(x0, ov, oomega, xref):
     xbar = xref * 0.0
@@ -220,8 +196,7 @@ def predict_motion(x0, ov, oomega, xref):
         xbar[2, i] = state.yaw
     return xbar
 
-
-def linear_mpc_control(xref, xbar, x0, vref, u0):    
+def linear_mpc_control(xref, xbar, x0, vref):    
     b,Radius = 0.2, 0.035     
     x = cvxpy.Variable((NX, T + 1))
     u = cvxpy.Variable((NU, T))
@@ -271,9 +246,16 @@ def linear_mpc_control(xref, xbar, x0, vref, u0):
     return ov, oomega, ox, oy, oyaw, ovr, ovl
 
 
-def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
+if __name__ == '__main__':
+    dl = 0.1 # course tick
+    ax = [0.0, 1.0, 1.5, 3.0, 4.0]
+    ay = [0.0, 1.0, 1.5, 1.0, 0.0] 
+    cx, cy, cyaw, ck, s = cubic_spline_planner.calc_spline_course(ax, ay, ds=dl)
+    sp = calc_speed_profile(cx, cy, cyaw, TARGET_SPEED)
+    
+    state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
+
     goal = [cx[-1], cy[-1]]
-    state = initial_state
     # initial yaw compensation
     if state.yaw - cyaw[0] >= math.pi:
         state.yaw -= math.pi * 2.0
@@ -281,33 +263,23 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
         state.yaw += math.pi * 2.0
 
     time = 0.0
-    x = [state.x]
-    y = [state.y]
-    yaw = [state.yaw]
-    v = [0.0]
-    t = [0.0]
-    omega = [0.0]
+    x, y, yaw, v, omega, t = [state.x], [state.y], [state.yaw], [0.0], [0.0], [0.0]
     target_ind, _ = calc_nearest_index(state, cx, cy, cyaw, 0)
-    vi,vwheel,prev_v = 0,0,0
-    prev_vwheel = 0
-    alplp=0.4
-    omegai = 0
-    u0 = [0 ,0]
+
+    vi, omegai = 0,0
     oomega, ov, ox, oy, oyaw = None, None, None, None, None
     ovr, ovl = None, None
-    cyaw = smooth_yaw(cyaw)
-    
+    cyaw = smooth_yaw(cyaw)  
 
-    while MAX_TIME >= time:
+while MAX_TIME >= time:
         xref, target_ind, vref = calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, target_ind,vi)       
         x0 = [state.x, state.y, state.yaw]  # current state        
-        ov, oomega, ox, oy, oyaw, ovr, ovl = iterative_linear_mpc_control(xref, x0, vref, ov, oomega, u0)
+        ov, oomega, ox, oy, oyaw, ovr, ovl = iterative_linear_mpc_control(xref, x0, vref, ov, oomega)
+
         if oomega is not None:
             vi , omegai = ov[0], oomega[0]
-            u0 = [ov[0], oomega[0]]
-        vwheel = vi
         
-        state = update_state(state, vwheel, omegai)
+        state = update_state(state, vi, omegai)
         time = time + DT
             
         x.append(state.x)
@@ -317,7 +289,7 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
         t.append(time)
         omega.append(omegai)
 
-        if check_goal(state, goal, target_ind, len(cx), vwheel):
+        if check_goal(state, goal, target_ind, len(cx), vi):
             print("Goal")
             break       
         if target_ind % 1 == 0 and show_animation == True:
@@ -328,38 +300,22 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
             plt.plot(cx[target_ind], cy[target_ind], "xg", label="target")
             plt.axis("equal")
             plt.grid(True)
-            plt.title("speed[m/sec]:" + str(round(vwheel, 2))
-                      + ",target index:" + str(target_ind))
-            plt.pause(0.0003)
-    return t, x, y, yaw, v, omega
+            plt.title("speed[m/sec]:" + str(round(vi, 2)))
+            plt.pause(0.0005)
 
-
-if __name__ == '__main__':
-    dl = 0.1 # course tick
-    cx, cy, cyaw, ck = get_forward_course(dl)
-    sp = calc_speed_profile(cx, cy, cyaw, TARGET_SPEED)
-    
-    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
-    t, x, y, yaw, v, omega = do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state)
-    
-    if show_animation:  # pragma: no cover
-        plt.close("all")
-        plt.subplots()
-        plt.plot(cx, cy, "-r", label="spline")
-        plt.plot(x, y, "-g", label="tracking")
-        plt.grid(True)
-        plt.axis("equal")
-        plt.xlabel("x[m]")
-        plt.ylabel("y[m]")
-        plt.legend()
-
-        plt.subplots()
-        plt.plot(t, v, "-r", label="speed")
-        plt.grid(True)
-        plt.xlabel("Time [s]")
-        plt.ylabel("Speed [kmh]")
-
-        plt.show()
-    
-
-
+if show_animation:  # pragma: no cover
+    plt.close("all")
+    plt.subplots()
+    plt.plot(cx, cy, "-r", label="spline")
+    plt.plot(x, y, "-g", label="tracking")
+    plt.grid(True)
+    plt.axis("equal")
+    plt.xlabel("x[m]")
+    plt.ylabel("y[m]")
+    plt.legend()
+    plt.subplots()
+    plt.plot(t, v, "-r", label="speed")
+    plt.grid(True)
+    plt.xlabel("Time [s]")
+    plt.ylabel("Speed [kmh]")
+    plt.show()
